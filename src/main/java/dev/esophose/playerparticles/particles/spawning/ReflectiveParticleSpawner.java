@@ -41,7 +41,7 @@ public class ReflectiveParticleSpawner extends ParticleSpawner {
         if (players.isEmpty())
             return;
 
-        new ParticlePacket(particleEffect, color, true).sendTo(center, getPlayersInRange(center, isLongRange, owner));
+        new ParticlePacket(particleEffect, color, true).sendTo(center, players);
     }
 
     @Override
@@ -53,7 +53,7 @@ public class ReflectiveParticleSpawner extends ParticleSpawner {
         if (players.isEmpty())
             return;
 
-        new ParticlePacket(particleEffect, offsetX, offsetY, offsetZ, speed, amount, true, spawnMaterial).sendTo(center, getPlayersInRange(center, isLongRange, owner));
+        new ParticlePacket(particleEffect, offsetX, offsetY, offsetZ, speed, amount, true, spawnMaterial).sendTo(center, players);
     }
 
     @Override

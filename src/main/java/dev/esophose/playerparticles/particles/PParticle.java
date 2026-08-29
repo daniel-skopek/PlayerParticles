@@ -125,9 +125,9 @@ public class PParticle {
         double y = this.location.getY();
         double z = this.location.getZ();
 
-        x += this.xOff * 1.75D * (Math.random() > 0.5 ? Math.random() : -Math.random());
-        y += this.yOff * 1.75D * (Math.random() > 0.5 ? Math.random() : -Math.random());
-        z += this.zOff * 1.75D * (Math.random() > 0.5 ? Math.random() : -Math.random());
+        x += this.xOff * 1.75D * (Math.random() * 2.0D - 1.0D);
+        y += this.yOff * 1.75D * (Math.random() * 2.0D - 1.0D);
+        z += this.zOff * 1.75D * (Math.random() * 2.0D - 1.0D);
 
         return new Location(this.location.getWorld(), x, y, z);
     }
