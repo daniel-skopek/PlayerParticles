@@ -9,9 +9,15 @@ import dev.esophose.playerparticles.particles.data.ColorTransition;
 import dev.esophose.playerparticles.particles.data.ParticleColor;
 import dev.esophose.playerparticles.particles.data.Vibration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 public abstract class ParticleSpawner {
@@ -110,20 +116,113 @@ public abstract class ParticleSpawner {
      * @return A List of Players within the particle display range
      */
     public static List<Player> getPlayersInRange(Location center, boolean isLongRange, Player owner) {
-        List<Player> players = new ArrayList<>();
-        int range = !isLongRange ? Settings.PARTICLE_RENDER_RANGE_PLAYER.get() : Settings.PARTICLE_RENDER_RANGE_FIXED_EFFECT.get();
-        range *= range;
+        ViewerSnapshot snapshot = getViewerSnapshot();
+        List<Viewer> viewers = snapshot.byWorld.get(center.getWorld());
+        if (viewers == null || viewers.isEmpty())
+            return Collections.emptyList();
 
-        for (PPlayer pplayer : PlayerParticles.getInstance().getManager(ParticleManager.class).getPPlayers().values()) {
-            Player p = pplayer.getPlayer();
-            if (!canSee(p, owner) || (!pplayer.canSeeOwnParticles() && p == owner && !isLongRange))
+        double range = isLongRange ? snapshot.fixedRangeSq : snapshot.playerRangeSq;
+        double centerX = center.getX();
+        double centerY = center.getY();
+        double centerZ = center.getZ();
+
+        List<Player> players = new ArrayList<>(viewers.size());
+        for (Viewer viewer : viewers) {
+            Player player = viewer.player;
+            if (!canSee(player, owner))
+                continue;
+            if (!viewer.pplayer.canSeeOwnParticles() && player == owner && !isLongRange)
+                continue;
+            if (!viewer.pplayer.canSeeParticles())
                 continue;
 
-            if (p != null && pplayer.canSeeParticles() && p.getWorld().equals(center.getWorld()) && center.distanceSquared(p.getLocation()) <= range)
-                players.add(p);
+            double dx = centerX - viewer.x;
+            double dy = centerY - viewer.y;
+            double dz = centerZ - viewer.z;
+            if (dx * dx + dy * dy + dz * dz <= range)
+                players.add(player);
         }
 
         return players;
+    }
+
+    /**
+     * Gets the current tick's viewer snapshot, rebuilding it if it has become stale.
+     * Positions are only sampled once per tick per thread instead of once per particle.
+     *
+     * @return The current ViewerSnapshot
+     */
+    private static ViewerSnapshot getViewerSnapshot() {
+        ViewerSnapshot snapshot = VIEWER_SNAPSHOT.get();
+        long now = System.currentTimeMillis();
+        if (snapshot == null || now - snapshot.timestamp >= SNAPSHOT_TTL_MS) {
+            snapshot = ViewerSnapshot.create();
+            VIEWER_SNAPSHOT.set(snapshot);
+        }
+        return snapshot;
+    }
+
+    private static final long SNAPSHOT_TTL_MS = 45L;
+    private static final ThreadLocal<ViewerSnapshot> VIEWER_SNAPSHOT = new ThreadLocal<>();
+
+    /**
+     * A snapshot of all online players and their positions, grouped by world.
+     */
+    private static final class ViewerSnapshot {
+
+        private final Map<World, List<Viewer>> byWorld;
+        private final long timestamp;
+        private final double playerRangeSq;
+        private final double fixedRangeSq;
+
+        private ViewerSnapshot(Map<World, List<Viewer>> byWorld, long timestamp, double playerRangeSq, double fixedRangeSq) {
+            this.byWorld = byWorld;
+            this.timestamp = timestamp;
+            this.playerRangeSq = playerRangeSq;
+            this.fixedRangeSq = fixedRangeSq;
+        }
+
+        private static ViewerSnapshot create() {
+            Map<World, List<Viewer>> byWorld = new HashMap<>();
+            Map<UUID, PPlayer> pplayers = PlayerParticles.getInstance().getManager(ParticleManager.class).getPPlayers();
+
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                PPlayer pplayer = pplayers.get(player.getUniqueId());
+                if (pplayer == null)
+                    continue;
+
+                Location location = player.getLocation();
+                World world = location.getWorld();
+                if (world == null)
+                    continue;
+
+                byWorld.computeIfAbsent(world, k -> new ArrayList<>()).add(new Viewer(player, pplayer, location.getX(), location.getY(), location.getZ()));
+            }
+
+            double playerRange = Settings.PARTICLE_RENDER_RANGE_PLAYER.get();
+            double fixedRange = Settings.PARTICLE_RENDER_RANGE_FIXED_EFFECT.get();
+            return new ViewerSnapshot(byWorld, System.currentTimeMillis(), playerRange * playerRange, fixedRange * fixedRange);
+        }
+
+    }
+
+    /**
+     * A cached viewer holding an online player, their PPlayer, and their sampled position.
+     */
+    private static final class Viewer {
+
+        private final Player player;
+        private final PPlayer pplayer;
+        private final double x, y, z;
+
+        private Viewer(Player player, PPlayer pplayer, double x, double y, double z) {
+            this.player = player;
+            this.pplayer = pplayer;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
     }
 
     /**

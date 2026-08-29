@@ -55,6 +55,9 @@ public class ParticleManager extends Manager implements Listener, Runnable {
      */
     private int hue;
     private final Random random;
+    private OrdinaryColor rainbowColor;
+    private OrdinaryColor shiftedRainbowColor;
+    private NoteColor rainbowNoteColor;
 
     public ParticleManager(RosePlugin playerParticles) {
         super(playerParticles);
@@ -63,6 +66,7 @@ public class ParticleManager extends Manager implements Listener, Runnable {
         this.particleTask = null;
         this.hue = 0;
         this.random = new Random();
+        this.updateRainbowColors();
 
         Bukkit.getPluginManager().registerEvents(this, playerParticles);
     }
@@ -190,6 +194,7 @@ public class ParticleManager extends Manager implements Listener, Runnable {
 
         this.hue += Settings.RAINBOW_CYCLE_SPEED.get();
         this.hue %= 360;
+        this.updateRainbowColors();
 
         PermissionManager permissionManager = this.rosePlugin.getManager(PermissionManager.class);
 
@@ -353,13 +358,26 @@ public class ParticleManager extends Manager implements Listener, Runnable {
     }
 
     /**
+     * Recomputes the cached rainbow colors from the current hue value
+     */
+    private void updateRainbowColors() {
+        Color rgb = Color.getHSBColor(this.hue / 360F, 1.0F, 1.0F);
+        this.rainbowColor = new OrdinaryColor(rgb.getRed(), rgb.getGreen(), rgb.getBlue());
+
+        Color shiftedRgb = Color.getHSBColor((this.hue / 360F) + 0.5F, 1.0F, 1.0F);
+        this.shiftedRainbowColor = new OrdinaryColor(shiftedRgb.getRed(), shiftedRgb.getGreen(), shiftedRgb.getBlue());
+
+        int note = ((int) Math.round(24 - 24 / 360.0 * this.hue) + 7) % 24;
+        this.rainbowNoteColor = new NoteColor(note);
+    }
+
+    /**
      * Gets the rainbow OrdinaryColor for particle spawning with data 'rainbow'
      * 
      * @return The rainbow OrdinaryColor for particle spawning with data 'rainbow'
      */
     public OrdinaryColor getRainbowParticleColor() {
-        Color rgb = Color.getHSBColor(this.hue / 360F, 1.0F, 1.0F);
-        return new OrdinaryColor(rgb.getRed(), rgb.getGreen(), rgb.getBlue());
+        return this.rainbowColor;
     }
 
     /**
@@ -368,8 +386,7 @@ public class ParticleManager extends Manager implements Listener, Runnable {
      * @return The rainbow OrdinaryColor for particle spawning with data 'rainbow', shifted half-way through the HSB spectrum
      */
     public OrdinaryColor getShiftedRainbowParticleColor() {
-        Color rgb = Color.getHSBColor((this.hue / 360F) + 0.5F, 1.0F, 1.0F);
-        return new OrdinaryColor(rgb.getRed(), rgb.getGreen(), rgb.getBlue());
+        return this.shiftedRainbowColor;
     }
 
     /**
@@ -378,8 +395,7 @@ public class ParticleManager extends Manager implements Listener, Runnable {
      * @return The rainbow NoteColor for particle spawning with data 'rainbow'
      */
     public NoteColor getRainbowNoteParticleColor() {
-        int note = ((int) Math.round(24 - 24 / 360.0 * this.hue) + 7) % 24;
-        return new NoteColor(note);
+        return this.rainbowNoteColor;
     }
     
     /**
